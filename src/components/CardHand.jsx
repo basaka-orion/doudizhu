@@ -1,82 +1,92 @@
-// 手牌组件
-import React from 'react'
+// src/components/CardHand.jsx
+import React, { useState, useRef } from 'react'
 import Card from './Card'
 
 const CardHand = ({ cards, selectedCards, onCardClick, selectable = true, isPlayer = false }) => {
+  const [isDragging, setIsDragging] = useState(false)
+  const [startIndex, setStartIndex] = useState(-1)
+  const containerRef = useRef(null)
+
   if (!cards || cards.length === 0) {
     return (
-      <div className="flex items-center justify-center min-h-[100px]">
-        <span className="text-white/50 text-lg">无牌</span>
+      <div className="flex items-center justify-center min-h-[120px]">
+        <span className="text-white/30 text-lg font-serif italic tracking-widest">No Cards</span>
       </div>
     )
   }
 
-  const handleCardClick = (card) => {
-    if (!selectable || onCardClick === null) return
+  // 计算重叠位置
+  const getCardStyle = (index, total) => {
+    if (!isPlayer) {
+      // AI 手牌更紧凑
+      const offset = 20;
+      return {
+        marginLeft: index === 0 ? 0 : `-${offset}px`,
+        zIndex: index,
+      }
+    }
+    // 玩家手牌
+    const maxOverlap = 60; // 最大重叠像素
+    const containerWidth = containerRef.current?.offsetWidth || 800;
+    const cardWidth = 100;
+    const totalNeeded = cardWidth + (total - 1) * (cardWidth - maxOverlap);
+    
+    let overlap = maxOverlap;
+    if (totalNeeded > containerWidth - 40) {
+      overlap = cardWidth - (containerWidth - 40 - cardWidth) / (total - 1);
+    }
 
-    // 检查是否是王炸
-    const isJokerBomb = (c1, c2) =>
-      (c1.rank === '小王' && c2.rank === '大王') ||
-      (c1.rank === '大王' && c2.rank === '小王')
+    return {
+      marginLeft: index === 0 ? 0 : `-${overlap}px`,
+      zIndex: index,
+      transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+    }
+  }
 
+  const handleToggleCard = (card) => {
     const isSelected = selectedCards.some(
       c => c.suit === card.suit && c.rank === card.rank
     )
-
+    let newSelected;
     if (isSelected) {
-      // 取消选择
-      const newSelected = selectedCards.filter(
-        c => !(c.suit === card.suit && c.rank === card.rank)
-      )
-      onCardClick(newSelected)
+      newSelected = selectedCards.filter(c => !(c.suit === card.suit && c.rank === card.rank))
     } else {
-      // 检查是否选择了王炸
-      let newSelected = [...selectedCards, card]
-
-      // 如果选择的是王，尝试与已选择的王组成王炸
-      if (card.rank === '小王' || card.rank === '大王') {
-        const otherJoker = selectedCards.find(
-          c => (c.rank === '小王' || c.rank === '大王') && c.rank !== card.rank
-        )
-        if (otherJoker) {
-          // 已有另一张王，选中这张就组成王炸
-          newSelected = [otherJoker, card]
-        }
-      }
-
-      onCardClick(newSelected)
+      newSelected = [...selectedCards, card]
     }
-  }
-
-  // 检查是否是炸弹或王炸
-  const isBombCard = (card) => {
-    const selectedRanks = selectedCards.map(c => c.rank)
-    if (selectedRanks.includes('小王') && selectedRanks.includes('大王')) {
-      return true
-    }
-    const count = selectedRanks.filter(r => r === card.rank).length
-    return count === 3 // 选第4张时显示炸弹效果
+    onCardClick(newSelected)
   }
 
   return (
-    <div className={`flex flex-wrap justify-center items-end gap-1 px-4 py-2 ${isPlayer ? 'min-h-[120px]' : ''}`}>
-      {cards.map((card, index) => {
-        const isSelected = selectedCards.some(
-          c => c.suit === card.suit && c.rank === card.rank
-        )
-        const showBomb = selectable && isSelected && isBombCard(card)
+    <div 
+      ref={containerRef}
+      className={`flex justify-center items-end px-10 py-6 select-none ${isPlayer ? 'min-h-[180px] w-full' : 'scale-75 origin-bottom'}`}
+    >
+      <div className="flex">
+        {cards.map((card, index) => {
+          const isSelected = selectedCards.some(
+            c => c.suit === card.suit && c.rank === card.rank
+          )
 
-        return (
-          <Card
-            key={`${card.rank}-${card.suit}-${index}`}
-            card={card}
-            selected={isSelected}
-            onClick={() => handleCardClick(card)}
-            disabled={!selectable}
-            isBomb={showBomb}
-          />
-        )
-      })}
+          return (
+            <div 
+              key={`${card.rank}-${card.suit}-${index}`}
+              style={getCardStyle(index, cards.length)}
+              className="relative group"
+            >
+              <Card
+                card={card}
+                selected={isSelected}
+                onClick={() => selectable && handleToggleCard(card)}
+                disabled={!selectable}
+              />
+              {/* 优雅的阴影和悬停效果 */}
+              {isPlayer && selectable && (
+                <div className="absolute inset-0 pointer-events-none rounded-lg group-hover:bg-white/5 transition-colors" />
+              )}
+            </div>
+          )
+        })}
+      </div>
     </div>
   )
 }

@@ -7,10 +7,6 @@ export const SUITS = {
 };
 
 export const RANKS = ['3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K', 'A', '2'];
-export const JOKERS = [
-  { rank: 'SJ', suit: 'JOKER', weight: 52, name: '小王' },
-  { rank: 'BJ', suit: 'JOKER', weight: 53, name: '大王' }
-];
 
 export const createDeck = () => {
   const deck = [];
@@ -28,16 +24,32 @@ export const createDeck = () => {
     }
     weight++;
   }
-  return [...deck, ...JOKERS.map(j => ({ 
-    id: j.rank, 
-    rank: j.name, 
-    suit: '🃏', 
-    color: j.rank === 'BJ' ? 'red' : 'black', 
-    weight: j.weight,
-    rankWeight: j.weight 
-  }))];
+  // Add Jokers
+  deck.push({ id: 'SJ', rank: '小王', suit: '🃏', color: 'black', weight: 52, rankWeight: 52, isJoker: true });
+  deck.push({ id: 'BJ', rank: '大王', suit: '🃏', color: 'red', weight: 53, rankWeight: 53, isJoker: true });
+  return deck;
 };
 
-export const sortCards = (cards) => {
+export const shuffleDeck = (deck) => {
+  const newDeck = [...deck];
+  for (let i = newDeck.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [newDeck[i], newDeck[j]] = [newDeck[j], newDeck[i]];
+  }
+  return newDeck;
+};
+
+export const dealCards = (shuffledDeck) => {
+  return {
+    player1: shuffledDeck.slice(0, 17),
+    player2: shuffledDeck.slice(17, 34),
+    player3: shuffledDeck.slice(34, 51),
+    landlordCards: shuffledDeck.slice(51, 54)
+  };
+};
+
+export const sortHand = (cards) => {
   return [...cards].sort((a, b) => b.weight - a.weight);
 };
+
+export const sortCards = sortHand;
