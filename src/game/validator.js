@@ -1,144 +1,87 @@
-// 核心出牌验证器
-export const CARD_TYPE = {
-  SINGLE: 'single',
-  PAIR: 'pair',
-  TRIPLE: 'triple',
-  TRIPLE_WITH_SINGLE: 'triple_with_single',
-  TRIPLE_WITH_PAIR: 'triple_with_pair',
-  STRAIGHT: 'straight',
-  DOUBLE_STRAIGHT: 'double_straight',
-  AIRPLANE: 'airplane',
-  AIRPLANE_WITH_SINGLE: 'airplane_with_single',
-  AIRPLANE_WITH_PAIR: 'airplane_with_pair',
-  QUAD_WITH_TWO: 'quad_with_two',
-  BOMB: 'bomb',
-  JOKER_BOMB: 'joker_bomb',
-  INVALID: 'invalid'
-}
+// src/game/validator.js
 
-// 牌值映射
-const rankValue = {
-  '3': 0, '4': 1, '5': 2, '6': 3, '7': 4, '8': 5, '9': 6, '10': 7, 
-  'J': 8, 'Q': 9, 'K': 10, 'A': 11, '2': 12, '小王': 13, '大王': 14
-}
+export const CARD_TYPES = {
+  SINGLE: '单张',
+  PAIR: '对子',
+  TRIPLE: '三张',
+  TRIPLE_SINGLE: '三带一',
+  TRIPLE_PAIR: '三带二',
+  STRAIGHT: '顺子',
+  PAIR_STRAIGHT: '连对',
+  AIRPLANE: '飞机',
+  AIRPLANE_SINGLE: '飞机带单',
+  AIRPLANE_PAIR: '飞机带双',
+  BOMB: '炸弹',
+  ROCKET: '王炸',
+  INVALID: '非法牌型'
+};
 
-export function getCardValue(card) {
-  if (!card) return -1
-  return rankValue[card.rank] ?? -1
-}
-
-export function getCardTypeName(type) {
-  const names = {
-    [CARD_TYPE.SINGLE]: '单张',
-    [CARD_TYPE.PAIR]: '对子',
-    [CARD_TYPE.TRIPLE]: '三不带',
-    [CARD_TYPE.TRIPLE_WITH_SINGLE]: '三带一',
-    [CARD_TYPE.TRIPLE_WITH_PAIR]: '三带二',
-    [CARD_TYPE.STRAIGHT]: '顺子',
-    [CARD_TYPE.DOUBLE_STRAIGHT]: '连对',
-    [CARD_TYPE.AIRPLANE]: '飞机',
-    [CARD_TYPE.AIRPLANE_WITH_SINGLE]: '飞机带单',
-    [CARD_TYPE.AIRPLANE_WITH_PAIR]: '飞机带对',
-    [CARD_TYPE.QUAD_WITH_TWO]: '四带二',
-    [CARD_TYPE.BOMB]: '炸弹',
-    [CARD_TYPE.JOKER_BOMB]: '王炸',
-    [CARD_TYPE.INVALID]: '非法牌型'
-  }
-  return names[type] || '未知'
-}
-
-export function validateCards(cards) {
-  if (!cards || cards.length === 0) return { valid: false, type: CARD_TYPE.INVALID }
-
-  const sortedCards = [...cards].sort((a, b) => getCardValue(a) - getCardValue(b))
-  const len = sortedCards.length
-  const values = sortedCards.map(c => getCardValue(c))
+export const getType = (cards) => {
+  if (!cards || cards.length === 0) return { type: CARD_TYPES.INVALID, weight: -1 };
   
-  const counts = {}
-  values.forEach(v => counts[v] = (counts[v] || 0) + 1)
-  const countValues = Object.values(counts).sort((a, b) => b - a)
-  const countKeys = Object.keys(counts).map(Number).sort((a, b) => counts[b] - counts[a] || a - b)
-
+  const sorted = [...cards].sort((a, b) => a.rankWeight - b.rankWeight);
+  const len = cards.length;
+  const weights = sorted.map(c => c.rankWeight);
+  
+  // 统计每个点数出现的次数
+  const counts = {};
+  weights.forEach(w => counts[w] = (counts[w] || 0) + 1);
+  const countEntries = Object.entries(counts).sort((a, b) => b[1] - a[1] || parseInt(b[0]) - parseInt(a[0]));
+  
   // 王炸
-  if (len === 2 && values.includes(13) && values.includes(14)) {
-    return { valid: true, type: CARD_TYPE.JOKER_BOMB, power: 999 }
+  if (len === 2 && weights[0] >= 52 && weights[1] >= 52) {
+    return { type: CARD_TYPES.ROCKET, weight: 1000 };
   }
 
   // 炸弹
-  if (len === 4 && countValues[0] === 4) {
-    return { valid: true, type: CARD_TYPE.BOMB, power: countKeys[0] }
+  if (len === 4 && countEntries[0][1] === 4) {
+    return { type: CARD_TYPES.BOMB, weight: parseInt(countEntries[0][0]) + 500 };
   }
 
   // 单张
-  if (len === 1) {
-    return { valid: true, type: CARD_TYPE.SINGLE, power: values[0] }
-  }
+  if (len === 1) return { type: CARD_TYPES.SINGLE, weight: weights[0] };
 
   // 对子
-  if (len === 2 && values[0] === values[1]) {
-    return { valid: true, type: CARD_TYPE.PAIR, power: values[0] }
+  if (len === 2 && countEntries[0][1] === 2) return { type: CARD_TYPES.PAIR, weight: weights[0] };
+
+  // 三张系列
+  if (len === 3 && countEntries[0][1] === 3) return { type: CARD_TYPES.TRIPLE, weight: weights[0] };
+  if (len === 4 && countEntries[0][1] === 3) return { type: CARD_TYPES.TRIPLE_SINGLE, weight: parseInt(countEntries[0][0]) };
+  if (len === 5 && countEntries[0][1] === 3 && countEntries[1][1] === 2) return { type: CARD_TYPES.TRIPLE_PAIR, weight: parseInt(countEntries[0][0]) };
+
+  // 顺子 (5张起)
+  if (len >= 5 && countEntries.every(e => e[1] === 1) && weights[len-1] < 12) { // 不能包含2和王
+    if (weights[len-1] - weights[0] === len - 1) return { type: CARD_TYPES.STRAIGHT, weight: weights[0] };
   }
 
-  // 三张
-  if (len === 3 && countValues[0] === 3) {
-    return { valid: true, type: CARD_TYPE.TRIPLE, power: countKeys[0] }
+  // 连对 (3对起)
+  if (len >= 6 && len % 2 === 0 && countEntries.every(e => e[1] === 2) && weights[len-1] < 12) {
+    const uniqueWeights = [...new Set(weights)].sort((a, b) => a - b);
+    if (uniqueWeights[uniqueWeights.length-1] - uniqueWeights[0] === uniqueWeights.length - 1) 
+      return { type: CARD_TYPES.PAIR_STRAIGHT, weight: weights[0] };
   }
 
-  // 三带一
-  if (len === 4 && countValues[0] === 3) {
-    return { valid: true, type: CARD_TYPE.TRIPLE_WITH_SINGLE, power: countKeys[0] }
-  }
+  // 更多复杂牌型（飞机等）简化处理
+  return { type: CARD_TYPES.INVALID, weight: -1 };
+};
 
-  // 三带二
-  if (len === 5 && countValues[0] === 3 && countValues[1] === 2) {
-    return { valid: true, type: CARD_TYPE.TRIPLE_WITH_PAIR, power: countKeys[0] }
-  }
+export const canPlay = (newCards, prevCards) => {
+  const newInfo = getType(newCards);
+  if (newInfo.type === CARD_TYPES.INVALID) return false;
+  if (!prevCards || prevCards.length === 0) return newInfo;
 
-  // 顺子 (5张及以上)
-  if (len >= 5 && countValues[0] === 1 && values[len-1] < 12) {
-    let isStraight = true
-    for (let i = 1; i < len; i++) {
-      if (values[i] !== values[i-1] + 1) { isStraight = false; break }
-    }
-    if (isStraight) return { valid: true, type: CARD_TYPE.STRAIGHT, power: values[0], length: len }
-  }
-
-  // 连对 (3对及以上)
-  if (len >= 6 && len % 2 === 0 && countValues.every(v => v === 2) && values[len-1] < 12) {
-    let isDoubleStraight = true
-    for (let i = 2; i < len; i += 2) {
-      if (values[i] !== values[i-2] + 1) { isDoubleStraight = false; break }
-    }
-    if (isDoubleStraight) return { valid: true, type: CARD_TYPE.DOUBLE_STRAIGHT, power: values[0], length: len / 2 }
-  }
-
-  // 飞机 (2个三张及以上)
-  if (len >= 6 && len % 3 === 0 && countValues.every(v => v === 3) && countKeys[0] < 12) {
-    const keys = countKeys.sort((a, b) => a - b)
-    let isAirplane = true
-    for (let i = 1; i < keys.length; i++) {
-      if (keys[i] !== keys[i-1] + 1) { isAirplane = false; break }
-    }
-    if (isAirplane) return { valid: true, type: CARD_TYPE.AIRPLANE, power: keys[0], length: keys.length }
-  }
-
-  return { valid: false, type: CARD_TYPE.INVALID }
-}
-
-export function canBeat(cards, lastCards, isLandlord, role) {
-  const v1 = validateCards(cards)
-  const v2 = validateCards(lastCards)
-
-  if (!v1.valid) return false
-  if (v1.type === CARD_TYPE.JOKER_BOMB) return true
-  if (v2.type === CARD_TYPE.JOKER_BOMB) return false
-
-  if (v1.type === CARD_TYPE.BOMB && v2.type !== CARD_TYPE.BOMB) return true
+  const prevInfo = getType(prevCards);
   
-  if (v1.type === v2.type) {
-    if (v1.length && v1.length !== v2.length) return false
-    return v1.power > v2.power
+  // 王炸压一切
+  if (newInfo.type === CARD_TYPES.ROCKET) return newInfo;
+  
+  // 炸弹压非炸弹
+  if (newInfo.type === CARD_TYPES.BOMB && prevInfo.type !== CARD_TYPES.BOMB && prevInfo.type !== CARD_TYPES.ROCKET) return newInfo;
+
+  // 同牌型比权重
+  if (newInfo.type === prevInfo.type && newCards.length === prevCards.length) {
+    if (newInfo.weight > prevInfo.weight) return newInfo;
   }
 
-  return false
-}
+  return false;
+};
