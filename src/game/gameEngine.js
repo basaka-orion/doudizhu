@@ -1,91 +1,99 @@
-// 游戏状态管理
+// src/game/gameEngine.js
 import { createDeck, shuffleDeck, dealCards, sortHand } from './cards'
-import { validateCards, canBeat } from './validator'
+import { validateCards, canBeat, CARD_TYPES } from './validator'
 import { aiPlay, aiBid } from './ai'
+import { audioEngine } from './audio'
 
-// 游戏阶段
 export const GAME_PHASE = {
-  DEALING: 'dealing',       // 发牌阶段
-  BIDDING: 'bidding',      // 叫地主阶段
-  PLAYING: 'playing',      // 游戏进行阶段
-  GAME_OVER: 'game_over',  // 游戏结束阶段
+  LOBBY: 'lobby',
+  DEALING: 'dealing',
+  BIDDING: 'bidding',
+  PLAYING: 'playing',
+  GAME_OVER: 'game_over',
 }
 
-// 玩家角色
 export const PLAYER_ROLE = {
-  PLAYER: 'player',   // 真实玩家(底部)
-  LEFT_AI: 'left',    // 左边AI
-  RIGHT_AI: 'right',  // 右边AI
+  PLAYER: 'player',
+  LEFT_AI: 'left',
+  RIGHT_AI: 'right',
 }
 
-// 难度级别
-export const DIFFICULTY = {
-  EASY: '新手',
-  MEDIUM: '精英',
-  HARD: '大师'
-}
+const TRASH_TALK = [
+  "快点啊，等到花儿都谢了！",
+  "你的牌打得也太好了吧！",
+  "大你！不要走！",
+  "你是地主还是我是地主？",
+  "这牌也能赢？我不信！",
+  "炸弹！感受痛苦吧！",
+  "配合一下，队友！",
+  "稳住，我们能赢。",
+  "这就是大师级的操作吗？",
+  "你要不起？我要！"
+];
 
-// 初始游戏状态
-export function createInitialState() {
-  const difficulties = [DIFFICULTY.EASY, DIFFICULTY.MEDIUM, DIFFICULTY.HARD]
+export function createInitialState(userAvatar = null) {
+  const avatars = [
+    'https://api.dicebear.com/7.x/avataaars/svg?seed=Felix',
+    'https://api.dicebear.com/7.x/avataaars/svg?seed=Aneka',
+    'https://api.dicebear.com/7.x/avataaars/svg?seed=Milo',
+    'https://api.dicebear.com/7.x/avataaars/svg?seed=Luna',
+    'https://api.dicebear.com/7.x/avataaars/svg?seed=Oscar'
+  ];
+
   return {
-    phase: GAME_PHASE.DEALING,
+    phase: GAME_PHASE.LOBBY,
     players: [
       { 
         id: 0, 
         role: PLAYER_ROLE.PLAYER, 
         hand: [], 
-        name: '你', 
+        name: 'You', 
         isAI: false, 
-        avatar: `https://api.multiavatar.com/player_${Math.random()}.svg`,
-        score: 0
+        avatar: userAvatar || avatars[0],
+        score: 0,
+        lastAction: '',
+        message: ''
       },
       { 
         id: 1, 
         role: PLAYER_ROLE.LEFT_AI, 
         hand: [], 
-        name: '电脑左', 
+        name: 'Master AI', 
         isAI: true, 
-        avatar: `https://api.multiavatar.com/ai_left_${Math.random()}.svg`,
-        difficulty: difficulties[Math.floor(Math.random() * 3)],
-        score: 0
+        avatar: avatars[1],
+        score: 0,
+        lastAction: '',
+        message: ''
       },
       { 
         id: 2, 
         role: PLAYER_ROLE.RIGHT_AI, 
         hand: [], 
-        name: '电脑右', 
+        name: 'Cyber Expert', 
         isAI: true, 
-        avatar: `https://api.multiavatar.com/ai_right_${Math.random()}.svg`,
-        difficulty: difficulties[Math.floor(Math.random() * 3)],
-        score: 0
+        avatar: avatars[2],
+        score: 0,
+        lastAction: '',
+        message: ''
       },
     ],
-    landlord: null,           
-    landlordCards: [],        
-    currentPlayer: 0,          
-    lastCards: null,           
-    lastPlayer: null,          
-    lastCardType: null,       
-    playArea: {               
-      [PLAYER_ROLE.PLAYER]: [],
-      [PLAYER_ROLE.LEFT_AI]: [],
-      [PLAYER_ROLE.RIGHT_AI]: [],
-    },
-    passCount: 0,             
-    bidInfo: {                
-      currentBidder: 0,       
-      bids: [0, 0, 0],       
-      finished: false,        
-    },
-    winner: null,             
-    winnerReason: '',         
-    message: '',              // 提示消息 (AI对话等)
-    multiplier: 1,            // 倍数
+    landlord: null,
+    landlordCards: [],
+    currentPlayer: 0,
+    lastCards: null,
+    lastPlayer: null,
+    playArea: { [PLAYER_ROLE.PLAYER]: [], [PLAYER_ROLE.LEFT_AI]: [], [PLAYER_ROLE.RIGHT_AI]: [] },
+    passCount: 0,
+    bidInfo: { currentBidder: 0, bids: [0, 0, 0], finished: false },
+    winner: null,
+    winnerReason: '',
+    multiplier: 1,
+    baseScore: 100
   }
 }
 
 export function deal(state) {
+  audioEngine.play('DEAL');
   const deck = createDeck()
   const shuffled = shuffleDeck(deck)
   const { player1, player2, player3, landlordCards } = dealCards(shuffled)
@@ -96,40 +104,43 @@ export function deal(state) {
     players: state.players.map((p, i) => ({
       ...p,
       hand: sortHand([player1, player2, player3][i]),
+      lastAction: '',
+      message: ''
     })),
     landlordCards,
     bidInfo: {
-      currentBidder: Math.floor(Math.random() * 3), // 随机谁先叫
+      currentBidder: Math.floor(Math.random() * 3),
       bids: [0, 0, 0],
       finished: false,
     },
     lastCards: null,
     lastPlayer: null,
     passCount: 0,
-    playArea: {
-      [PLAYER_ROLE.PLAYER]: [],
-      [PLAYER_ROLE.LEFT_AI]: [],
-      [PLAYER_ROLE.RIGHT_AI]: [],
-    },
+    multiplier: 1,
+    playArea: { [PLAYER_ROLE.PLAYER]: [], [PLAYER_ROLE.LEFT_AI]: [], [PLAYER_ROLE.RIGHT_AI]: [] },
   }
 }
 
 export function playerBid(state, bid) {
+  audioEngine.play('BID');
   const { bidInfo } = state
   const newBids = [...bidInfo.bids]
   newBids[bidInfo.currentBidder] = bid
 
   const currentIdx = bidInfo.currentBidder
-  let nextIdx = (currentIdx + 1) % 3
+  const nextIdx = (currentIdx + 1) % 3
   
-  // 检查是否结束叫地主
   const allBidded = newBids.filter(b => b !== 0).length + newBids.filter(b => b === 0).length >= 3
-  const hasThree = bid === 3
-  const finished = hasThree || (allBidded && Math.max(...newBids) > 0 && newBids[nextIdx] !== 0) || (newBids.every(b => b === 0) && allBidded)
+  const finished = bid === 3 || (allBidded && Math.max(...newBids) > 0);
+
+  // Update last action for UI display
+  const players = state.players.map((p, i) => 
+    i === currentIdx ? { ...p, lastAction: bid === 0 ? '不叫' : `${bid}分` } : p
+  );
 
   if (finished) {
     const maxBid = Math.max(...newBids)
-    if (maxBid === 0) return deal(state) // 重新发牌
+    if (maxBid === 0) return deal(state)
 
     const landlordIdx = newBids.lastIndexOf(maxBid)
     const landlord = state.players[landlordIdx].role
@@ -137,9 +148,10 @@ export function playerBid(state, bid) {
     return {
       ...state,
       phase: GAME_PHASE.PLAYING,
-      players: state.players.map((p, i) => ({
+      players: players.map((p, i) => ({
         ...p,
-        hand: i === landlordIdx ? sortHand([...p.hand, ...state.landlordCards]) : p.hand
+        hand: i === landlordIdx ? sortHand([...p.hand, ...state.landlordCards]) : p.hand,
+        lastAction: i === landlordIdx ? '地主' : p.lastAction
       })),
       landlord,
       currentPlayer: landlordIdx,
@@ -150,6 +162,7 @@ export function playerBid(state, bid) {
 
   return {
     ...state,
+    players,
     bidInfo: { ...bidInfo, bids: newBids, currentBidder: nextIdx }
   }
 }
@@ -163,33 +176,31 @@ export async function processAIBid(state) {
 
 export function playerPlayCards(state, cards) {
   if (state.currentPlayer !== 0 || state.phase !== GAME_PHASE.PLAYING) return state
-  
   if (!cards || cards.length === 0) return handlePass(state, 0)
 
   const validation = validateCards(cards)
-  if (!validation.valid) return state
+  if (validation.type === CARD_TYPES.INVALID) return state
 
   if (state.lastCards && state.lastCards.length > 0) {
-    if (!canBeat(cards, state.lastCards, state.landlord === PLAYER_ROLE.PLAYER, PLAYER_ROLE.PLAYER)) {
-      return state
-    }
+    if (!canBeat(cards, state.lastCards)) return state
   }
 
+  audioEngine.play(validation.type === CARD_TYPES.BOMB || validation.type === CARD_TYPES.ROCKET ? 'BOMB' : 'PLAY');
+
   const player = state.players[0]
-  const newHand = player.hand.filter(c => !cards.some(sc => sc.suit === c.suit && sc.rank === c.rank))
+  const newHand = player.hand.filter(c => !cards.some(sc => sc.id === c.id))
 
   let newMultiplier = state.multiplier
-  if (validation.type === 'bomb' || validation.type === 'joker_bomb') newMultiplier *= 2
+  if (validation.type === CARD_TYPES.BOMB || validation.type === CARD_TYPES.ROCKET) newMultiplier *= 2
 
   const newState = {
     ...state,
-    players: state.players.map((p, i) => i === 0 ? { ...p, hand: newHand } : p),
+    players: state.players.map((p, i) => i === 0 ? { ...p, hand: newHand, lastAction: '出牌' } : p),
     lastCards: cards,
     lastPlayer: PLAYER_ROLE.PLAYER,
-    lastCardType: validation.type,
-    playArea: { ...state.playArea, [PLAYER_ROLE.PLAYER]: cards },
+    playArea: { ...state.playArea, [PLAYER_ROLE.PLAYER]: cards, [PLAYER_ROLE.LEFT_AI]: [], [PLAYER_ROLE.RIGHT_AI]: [] },
     passCount: 0,
-    currentPlayer: getNextPlayer(state, 0),
+    currentPlayer: 1,
     multiplier: newMultiplier
   }
 
@@ -197,57 +208,31 @@ export function playerPlayCards(state, cards) {
 }
 
 function handlePass(state, playerIdx) {
-  const nextIdx = getNextPlayer(state, playerIdx)
+  audioEngine.play('PASS');
+  const nextIdx = (playerIdx + 1) % 3
   const newPassCount = state.passCount + 1
   
-  // 清空出牌区
+  const players = state.players.map((p, i) => i === playerIdx ? { ...p, lastAction: '过' } : p);
   const newPlayArea = { ...state.playArea, [state.players[playerIdx].role]: [] }
 
   if (newPassCount >= 2) {
     return {
       ...state,
+      players,
       currentPlayer: nextIdx,
       lastCards: null,
       lastPlayer: null,
       passCount: 0,
-      playArea: { ...newPlayArea, [state.players[nextIdx].role]: [] }
+      playArea: { [PLAYER_ROLE.PLAYER]: [], [PLAYER_ROLE.LEFT_AI]: [], [PLAYER_ROLE.RIGHT_AI]: [] }
     }
   }
 
   return {
     ...state,
+    players,
     currentPlayer: nextIdx,
     passCount: newPassCount,
     playArea: newPlayArea
-  }
-}
-
-function getNextPlayer(state, currentIdx) {
-  return (currentIdx + 1) % 3
-}
-
-export function checkGameOver(state) {
-  const winnerIdx = state.players.findIndex(p => p.hand.length === 0)
-  if (winnerIdx === -1) return state
-
-  const winner = state.players[winnerIdx].role
-  const isLandlordWin = winner === state.landlord
-  const baseScore = 10 * state.multiplier
-
-  return {
-    ...state,
-    phase: GAME_PHASE.GAME_OVER,
-    winner,
-    winnerReason: isLandlordWin ? '地主独霸一方！' : '农民起义成功！',
-    players: state.players.map(p => {
-      let scoreChange = 0
-      if (isLandlordWin) {
-        scoreChange = p.role === state.landlord ? baseScore * 2 : -baseScore
-      } else {
-        scoreChange = p.role === state.landlord ? -baseScore * 2 : baseScore
-      }
-      return { ...p, score: p.score + scoreChange }
-    })
   }
 }
 
@@ -261,30 +246,64 @@ export async function processAIAction(state) {
     players: players.map(p => ({ role: p.role, hand: p.hand })),
   })
 
-  if (!cards || cards.length === 0) return handlePass(state, currentPlayer)
+  // Random trash talk
+  let updatedPlayers = [...state.players];
+  if (Math.random() > 0.8) {
+    updatedPlayers[currentPlayer] = { ...player, message: TRASH_TALK[Math.floor(Math.random() * TRASH_TALK.length)] };
+    // Clear message after 3 seconds
+    setTimeout(() => {
+       // Note: This logic depends on state being external or using a functional update in UI
+    }, 3000);
+  }
+
+  if (!cards || cards.length === 0) return handlePass({ ...state, players: updatedPlayers }, currentPlayer)
 
   const validation = validateCards(cards)
-  const newHand = player.hand.filter(c => !cards.some(sc => sc.suit === c.suit && sc.rank === c.rank))
+  const newHand = player.hand.filter(c => !cards.some(sc => sc.id === c.id))
   
-  let newMultiplier = state.multiplier
-  if (validation.type === 'bomb' || validation.type === 'joker_bomb') newMultiplier *= 2
+  audioEngine.play(validation.type === CARD_TYPES.BOMB || validation.type === CARD_TYPES.ROCKET ? 'BOMB' : 'PLAY');
 
+  let newMultiplier = state.multiplier
+  if (validation.type === CARD_TYPES.BOMB || validation.type === CARD_TYPES.ROCKET) newMultiplier *= 2
+
+  const nextIdx = (currentPlayer + 1) % 3
   const newState = {
     ...state,
-    players: state.players.map((p, i) => i === currentPlayer ? { ...p, hand: newHand } : p),
+    players: updatedPlayers.map((p, i) => i === currentPlayer ? { ...p, hand: newHand, lastAction: '出牌' } : p),
     lastCards: cards,
     lastPlayer: player.role,
-    lastCardType: validation.type,
     playArea: { ...state.playArea, [player.role]: cards },
     passCount: 0,
-    currentPlayer: getNextPlayer(state, currentPlayer),
+    currentPlayer: nextIdx,
     multiplier: newMultiplier
   }
 
   return checkGameOver(newState)
 }
 
-export function restartGame() {
-  const state = createInitialState()
-  return deal(state)
+export function checkGameOver(state) {
+  const winnerIdx = state.players.findIndex(p => p.hand.length === 0)
+  if (winnerIdx === -1) return state
+
+  const winner = state.players[winnerIdx].role
+  const isLandlordWin = winner === state.landlord
+  const finalScore = state.baseScore * state.multiplier
+
+  audioEngine.play(winner === PLAYER_ROLE.PLAYER || (!isLandlordWin && state.landlord !== PLAYER_ROLE.PLAYER) ? 'WIN' : 'LOSE');
+
+  return {
+    ...state,
+    phase: GAME_PHASE.GAME_OVER,
+    winner,
+    winnerReason: isLandlordWin ? 'Landlord Dominates!' : 'Farmers Revolted!',
+    players: state.players.map(p => {
+      let scoreChange = 0
+      if (isLandlordWin) {
+        scoreChange = p.role === state.landlord ? finalScore * 2 : -finalScore
+      } else {
+        scoreChange = p.role === state.landlord ? -finalScore * 2 : finalScore
+      }
+      return { ...p, score: p.score + scoreChange, lastAction: p.hand.length === 0 ? 'WIN' : '' }
+    })
+  }
 }

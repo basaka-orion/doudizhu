@@ -1,51 +1,37 @@
 // src/game/audio.js
+
 class AudioEngine {
   constructor() {
-    this.ctx = null;
-    this.enabled = false;
-  }
-
-  init() {
-    if (this.ctx) return;
-    this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+    this.sounds = {};
     this.enabled = true;
+    this.baseUrl = 'https://assets.mixkit.co/active_storage/sfx/'; // Temporary open source assets
   }
 
-  // 合成简单的提示音
-  playTone(freq, type, duration, volume = 0.1) {
+  // Predefined sound URLs
+  static SOUNDS = {
+    DEAL: '2571/2571-preview.mp3', // Card flick
+    PLAY: '2572/2572-preview.mp3', // Thud/Slide
+    PASS: '2568/2568-preview.mp3', // Soft tap
+    BID: '2569/2569-preview.mp3', // Ping
+    WIN: '1435/1435-preview.mp3', // Fanfare
+    LOSE: '1434/1434-preview.mp3', // Aw
+    BOMB: '2567/2567-preview.mp3', // Explosion
+  };
+
+  play(key) {
     if (!this.enabled) return;
-    const osc = this.ctx.createOscillator();
-    const gain = this.ctx.createGain();
-    
-    osc.type = type;
-    osc.frequency.setValueAtTime(freq, this.ctx.currentTime);
-    
-    gain.gain.setValueAtTime(volume, this.ctx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + duration);
-    
-    osc.connect(gain);
-    gain.connect(this.ctx.destination);
-    
-    osc.start();
-    osc.stop(this.ctx.currentTime + duration);
+    try {
+      const audio = new Audio(this.baseUrl + AudioEngine.SOUNDS[key]);
+      audio.volume = 0.5;
+      audio.play().catch(e => console.log('Audio blocked', e));
+    } catch (e) {
+      console.error('Audio error', e);
+    }
   }
 
-  playClick() { this.playTone(600, 'sine', 0.1); }
-  playSelect() { this.playTone(800, 'sine', 0.05, 0.05); }
-  playDeal() { this.playTone(400, 'triangle', 0.05, 0.05); }
-  playPlay() { this.playTone(300, 'square', 0.2, 0.05); }
-  playBomb() {
-    if (!this.enabled) return;
-    const osc = this.ctx.createOscillator();
-    const gain = this.ctx.createGain();
-    osc.frequency.setValueAtTime(150, this.ctx.currentTime);
-    osc.frequency.exponentialRampToValueAtTime(40, this.ctx.currentTime + 0.5);
-    gain.gain.setValueAtTime(0.2, this.ctx.currentTime);
-    gain.gain.linearRampToValueAtTime(0, this.ctx.currentTime + 0.5);
-    osc.connect(gain);
-    gain.connect(this.ctx.destination);
-    osc.start();
-    osc.stop(this.ctx.currentTime + 0.5);
+  toggle() {
+    this.enabled = !this.enabled;
+    return this.enabled;
   }
 }
 

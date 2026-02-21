@@ -1,57 +1,62 @@
 // src/components/Card.jsx
 import React from 'react'
+import { motion } from 'framer-motion'
 
 const Card = ({ card, selected, onClick, disabled, isBomb }) => {
   const { rank, suit, color, isJoker } = card
 
-  // 牌面显示
   const getDisplayRank = (r) => {
-    if (r === '小王') return 'JOKER'
-    if (r === '大王') return 'JOKER'
+    if (r === '小王') return 'J'
+    if (r === '大王') return 'J'
     return r
   }
 
-  const rankClass = isJoker ? 'text-lg font-black' : 'text-2xl font-bold'
-  
   return (
-    <div
+    <motion.div
+      whileHover={{ y: selected ? -32 : -12, scale: 1.05 }}
+      whileTap={{ scale: 0.95 }}
       onClick={onClick}
       className={`
-        relative w-24 h-36 rounded-xl cursor-pointer border-2 shadow-2xl transition-all duration-300 transform
-        ${selected ? '-translate-y-8 shadow-[0_20px_40px_rgba(0,0,0,0.4)] border-amber-400 z-50' : 'bg-white border-gray-200 hover:-translate-y-4 hover:shadow-xl'}
-        ${disabled ? 'cursor-default brightness-90' : ''}
+        relative w-24 h-36 rounded-2xl cursor-pointer border-2 shadow-[0_10px_20px_rgba(0,0,0,0.3)] transition-all duration-300
+        ${selected ? '-translate-y-8 border-amber-400 shadow-[0_30px_60px_rgba(0,0,0,0.6)] z-50 ring-2 ring-amber-400/50' : 'bg-white border-stone-200'}
+        ${disabled ? 'cursor-default grayscale-[0.2] brightness-90' : ''}
         ${isBomb ? 'ring-4 ring-red-500 animate-pulse' : ''}
       `}
       style={{
         backgroundColor: '#fff',
-        color: color === 'red' ? '#e11d48' : '#1f2937'
+        color: color === 'red' ? '#e11d48' : '#1c1917'
       }}
     >
-      {/* 牌面纹理 */}
-      <div className="absolute inset-1 border border-gray-100 rounded-lg opacity-50" />
-      
-      {/* 左上角 */}
-      <div className="absolute top-2 left-2 flex flex-col items-center leading-none">
-        <span className={rankClass}>{getDisplayRank(rank)}</span>
-        {!isJoker && <span className="text-xl">{suit}</span>}
+      {/* Decorative Border */}
+      <div className="absolute inset-1.5 border border-stone-100 rounded-xl pointer-events-none" />
+
+      {/* Top Left Corner */}
+      <div className="absolute top-2.5 left-2.5 flex flex-col items-center leading-none">
+        <span className={`text-2xl font-black ${isJoker ? 'text-lg' : ''}`}>{getDisplayRank(rank)}</span>
+        {!isJoker && <span className="text-sm mt-0.5">{suit}</span>}
+        {isJoker && <span className="text-[8px] font-black uppercase tracking-tighter mt-0.5">Joker</span>}
       </div>
 
-      {/* 中心大图标 */}
-      <div className="absolute inset-0 flex items-center justify-center opacity-10">
+      {/* Center Symbol */}
+      <div className="absolute inset-0 flex items-center justify-center opacity-10 pointer-events-none">
          <span className="text-7xl select-none">{isJoker ? '🃏' : suit}</span>
       </div>
 
-      {/* 右下角 (倒转) */}
-      <div className="absolute bottom-2 right-2 flex flex-col items-center leading-none rotate-180">
-        <span className={rankClass}>{getDisplayRank(rank)}</span>
-        {!isJoker && <span className="text-xl">{suit}</span>}
+      {/* Bottom Right Corner */}
+      <div className="absolute bottom-2.5 right-2.5 flex flex-col items-center leading-none rotate-180">
+        <span className={`text-2xl font-black ${isJoker ? 'text-lg' : ''}`}>{getDisplayRank(rank)}</span>
+        {!isJoker && <span className="text-sm mt-0.5">{suit}</span>}
+        {isJoker && <span className="text-[8px] font-black uppercase tracking-tighter mt-0.5">Joker</span>}
       </div>
 
-      {/* 选中状态遮罩 */}
+      {/* Surface Gloss */}
+      <div className="absolute inset-0 bg-gradient-to-br from-white/20 to-transparent rounded-2xl pointer-events-none" />
+      
+      {/* Selection Glow */}
       {selected && (
-        <div className="absolute inset-0 bg-amber-500/10 rounded-lg pointer-events-none" />
+        <div className="absolute inset-0 bg-amber-500/5 rounded-2xl pointer-events-none" />
       )}
-    </div>
+    </motion.div>
   )
 }
 
